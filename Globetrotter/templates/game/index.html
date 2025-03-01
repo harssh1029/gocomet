@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Globetrotter Quiz</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        .quiz-container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .option-btn {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 10px;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            cursor: pointer;
+            background: white;
+            font-size: 16px;
+        }
+        .selected {
+            background-color: #007bff;
+            color: white;
+        }
+        .feedback {
+            font-size: 20px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="quiz-container mt-5">
+        <h1>Guess the Destination!</h1>
+        <p id="question-number"></p>
+        <p id="clue"></p>
+        <button id="hint-btn" class="btn btn-warning">Show Hint</button>
+        <p id="hint-box" class="hint-box" style="display:none;"></p>
+        <div id="options"></div>
+        <button id="submit-btn" class="btn btn-success mt-3" disabled>Submit</button>
+        <p id="feedback" class="feedback"></p>
+        <p id="score">Score: 0</p>
+        <button id="next-btn" class="btn btn-primary mt-3" style="display: none;">Next Question</button>
+        <button id="whatsapp-btn" class="btn btn-success mt-3" style="display: none;">📲 Invite on WhatsApp</button>
+    </div>
+
+    <script>
+        let selectedOption = null;
+        let correctAnswer = "";
+        let hints = [];
+        let score = 0;
+        let totalQuestions = 3;
+        let currentQuestion = 0;
+        let hintUsed = false;
+
+        function loadGame() {
+            if (currentQuestion >= totalQuestions) {
+                document.querySelector(".quiz-container").innerHTML = `
+                    <h1>Thanks for playing!</h1>
+                    <p>Your total score is: <strong>${score}</strong></p>
+                    <button id="play-again-btn" class="btn btn-primary mt-3">Play Again</button>
+                    <button id="whatsapp-btn" class="btn btn-success mt-3">📲 Invite on WhatsApp</button>
+                `;
+                document.getElementById('whatsapp-btn').onclick = shareOnWhatsApp;
+                return;
+            }
+
+            fetch('/game/random/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('clue').innerText = "No destinations available.";
+                        return;
+                    }
+
+                    hints = data.clues;
+                    correctAnswer = data.correct_answer;
+                    hintUsed = false;
+                    selectedOption = null;
+
+                    document.getElementById('question-number').innerText = `Question ${currentQuestion + 1} of ${totalQuestions}`;
+                    document.getElementById('clue').innerText = `Clue: ${hints[0]}`;
+                    document.getElementById('hint-box').innerText = hints[1] || "No more hints!";
+                    document.getElementById('hint-box').style.display = 'none';
+                    document.getElementById('hint-btn').disabled = hints.length <= 1;
+
+                    // Ensure unique options
+                    let uniqueOptions = new Set(data.options);
+                    uniqueOptions.add(correctAnswer);
+                    let optionsList = Array.from(uniqueOptions).slice(0, 4); // Ensure only 4 options
+
+                    let optionsDiv = document.getElementById('options');
+                    optionsDiv.innerHTML = '';
+
+                    optionsList.forEach(option => {
+                        let btn = document.createElement('button');
+                        btn.className = 'option-btn';
+                        btn.innerText = option;
+                        btn.onclick = function() {
+                            selectOption(btn, option);
+                        };
+                        optionsDiv.appendChild(btn);
+                    });
+
+                    document.getElementById('submit-btn').disabled = true;
+                    document.getElementById('submit-btn').style.display = 'inline-block';
+                    document.getElementById('submit-btn').onclick = submitAnswer;
+                    document.getElementById('next-btn').style.display = 'none';
+                    document.getElementById('feedback').innerText = '';
+                })
+                .catch(error => console.error("Error fetching data:", error));
+        }
+
+        function selectOption(btn, option) {
+            document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedOption = option;
+            document.getElementById('submit-btn').disabled = false;
+        }
+
+        function submitAnswer() {
+            if (!selectedOption) return;
+
+            let feedback = document.getElementById('feedback');
+            if (selectedOption === correctAnswer) {
+                feedback.innerHTML = "🎉 Correct! " + correctAnswer + " is the right answer!";
+                feedback.style.color = "green";
+                score += hintUsed ? 2 : 5;
+            } else {
+                feedback.innerHTML = "😢 Wrong! The correct answer is: " + correctAnswer;
+                feedback.style.color = "red";
+            }
+
+            document.getElementById('score').innerText = `Score: ${score}`;
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'block';
+            document.getElementById('next-btn').onclick = function() {
+                currentQuestion++;
+                loadGame();
+            };
+        }
+
+        function shareOnWhatsApp() {
+            let message = `I scored ${score} points in the Globetrotter Quiz! 🌍 Think you can beat me? Try it here: https://your-quiz-link.com`;
+            let url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            window.open(url, '_blank');
+        }
+
+        function resetGame() {
+            score = 0;
+            currentQuestion = 0;
+
+            // Reset the UI properly
+            document.querySelector(".quiz-container").innerHTML = `
+                <h1>Globetrotter Quiz</h1>
+                <p id="question-number"></p>
+                <p id="clue"></p>
+                <button id="hint-btn" class="btn btn-warning">Show Hint</button>
+                <p id="hint-box" class="hint-box" style="display:none;"></p>
+                <div id="options"></div>
+                <button id="submit-btn" class="btn btn-success mt-3" disabled>Submit</button>
+                <p id="feedback" class="feedback"></p>
+                <p id="score">Score: 0</p>
+                <button id="next-btn" class="btn btn-primary mt-3" style="display: none;">Next Question</button>
+                <button id="whatsapp-btn" class="btn btn-success mt-3" style="display: none;">📲 Invite on WhatsApp</button>
+            `;
+
+            loadGame(); // Restart the quiz
+        }
+
+        document.addEventListener("click", function(event) {
+            if (event.target.id === "play-again-btn") {
+                resetGame();
+            }
+        });
+
+        document.getElementById('hint-btn').onclick = function() {
+            document.getElementById('hint-box').style.display = 'block';
+            hintUsed = true;
+        };
+
+        loadGame();
+    </script>
+</body>
+</html>
